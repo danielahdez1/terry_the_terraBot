@@ -36,6 +36,8 @@ class LightMonitor(Monitor):
 
     def perceive(self):
         # BEGIN STUDENT CODE
+        light_data = self.sensordata["light"] // 3600
+        self.insolation += light_data
         # END STUDENT CODE
         pass
 
@@ -52,6 +54,10 @@ class LightMonitor(Monitor):
             #  for the LightBehavior based on this calculation
 
             # BEGIN STUDENT CODE
+            ts = self.sensors.get_time()
+            te = 
+            self.non_lighting_ambient_insolation(ts, te)
+
             # END STUDENT CODE
             pass
 
