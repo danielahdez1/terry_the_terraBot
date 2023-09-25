@@ -83,7 +83,7 @@ class LayeredGreenhouseAgent:
         self.execut.setPlanningLayer(self.planning)
         self.execut.setBehavioralLayer(self.behavioral)
 
-        self.executive.setMonitors(self.sensors, self.actuators.actuator state, [light monitor.LightMonitor()])
+        self.execut.setMonitors(self.sensors, self.actuators.actuator state, [light monitor.LightMonitor()])
         
         # END STUDENT CODE
 
