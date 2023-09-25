@@ -20,13 +20,22 @@ class BehavioralLayer:
 
     def startBehavior(self,name):
         # BEGIN STUDENT CODE
+        behavior = self.getBehavior(name)
+        if behavior and not self.isEnabled(behavior):
+            self.enabled.append(behavior)
+            behavior.start()
+            #print('enablin',self.enabled)
         # END STUDENT CODE
-        pass
+        
 
     def pauseBehavior(self,name):
         # BEGIN STUDENT CODE
+        behavior = self.getBehavior(name)
+        if behavior and self.isEnabled(behavior):
+            self.enabled.remove(behavior)
+            behavior.pause()
         # END STUDENT CODE
-        pass
+        
 
     def doStep(self):
         for behavior in self.enabled:
@@ -63,12 +72,11 @@ class ExecutiveLayer:
             if (m.name == name): return m
         return None
 
-    def setMonitors(self, sensors, actuator_state, monitorsList):
+    def setMonitors(self, sensors, monitorsList):
         self.monitors = monitorsList
         now = sensors.getTime()
         for monitor in self.monitors:
             monitor.setSensors(sensors)
-            monitor.setActuatorState(actuator_state)
             monitor.setExecutive(self)
             monitor.last_time = now
             monitor.dt = 0
@@ -78,6 +86,29 @@ class ExecutiveLayer:
         # NOTE: Disable any behaviors that need to be disabled
         #   before enabling any new behaviors
         # BEGIN STUDENT CODE
+      
+        for behavior_name in self.schedule:
+            #print(behavior_name,self.schedule[behavior_name])
+            doPause = True
+            for start,end in self.schedule[behavior_name]:
+                #if t<start*60 or t>=end*60:
+                if start*60<=t<end*60:
+                    doPause = False
+                    #break
+                    #[1,5],[90,100]
+                    
+            
+            if doPause:
+                behavior = self.behavioral.pauseBehavior(behavior_name)
+
+
+        
+        for behavior_name in self.schedule:
+            for start,end in self.schedule[behavior_name]:
+                if start*60<=t<end*60:
+                    self.behavioral.startBehavior(behavior_name)
+
+      
         # END STUDENT CODE
         for monitor in self.monitors:
             monitor.doMonitor()
