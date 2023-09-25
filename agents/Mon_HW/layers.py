@@ -72,15 +72,18 @@ class ExecutiveLayer:
             if (m.name == name): return m
         return None
 
-    def setMonitors(self, sensors, monitorsList):
+    def setMonitors(self, sensors, actuator state, monitorsList): 
         self.monitors = monitorsList
         now = sensors.getTime()
-        for monitor in self.monitors:
-            monitor.setSensors(sensors)
+        for monitor in self.monitors: 
+            monitor.setSensors(sensors) 
+            monitor.setActuatorState(actuator state) 
             monitor.setExecutive(self)
-            monitor.last_time = now
+            monitor.last time = now 
             monitor.dt = 0
             monitor.activate()
+    
+    
 
     def doStep(self, t): #t time in seconds since midnight
         # NOTE: Disable any behaviors that need to be disabled
