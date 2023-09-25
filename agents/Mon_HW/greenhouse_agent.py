@@ -1,5 +1,6 @@
 import rospy, ros_hardware, layers
 import sys, os, select, time
+import light_monitor
 from terrabot_utils import time_since_midnight
 
 import greenhouse_behaviors as gb
@@ -81,6 +82,8 @@ class LayeredGreenhouseAgent:
         
         self.execut.setPlanningLayer(self.planning)
         self.execut.setBehavioralLayer(self.behavioral)
+
+        self.executive.setMonitors(self.sensors, self.actuators.actuator state, [light monitor.LightMonitor()])
         
         # END STUDENT CODE
 

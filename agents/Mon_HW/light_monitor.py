@@ -55,9 +55,11 @@ class LightMonitor(Monitor):
 
             # BEGIN STUDENT CODE
             ts = self.sensors.get_time()
-            te = 
-            self.non_lighting_ambient_insolation(ts, te)
-
+            te = self.mtime - ts
+            amb_light = self.non_lighting_ambient_insolation(ts, te)
+            time_left = self.lighting_time_left(ts)
+            total_light = amb_light + time_left
+            optimal["light_level"] = [total_light - 50,total_light + 50]
             # END STUDENT CODE
             pass
 

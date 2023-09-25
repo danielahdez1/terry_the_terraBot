@@ -17,36 +17,45 @@ class Light(Behavior):
 
     def __init__(self):
         super(Light, self).__init__("LightBehavior")
-        self.optimal_level = optimal['light_level'] #860,940
+        self.optimal_level = optimal['light_level']
 
         # STUDENT CODE: Modify these lines to use your own initial state name
         #               and add all your FSM states
-       
-        
-        self.initial = 'init'
-        self.states = ['init','Night','Day']
+        self.initial = 'initial'
+        self.states = [self.initial, 'post_halt', 'light', 'dark']
 
         self.fsm = Machine(self, states=self.states, initial=self.initial,
                            ignore_invalid_triggers=True)
-  
+
         # Add FSM transitions and actions
         # BEGIN STUDENT CODE
-        
-        self.fsm.add_transition('disable','*','init', after="turnOff")
-        self.fsm.add_transition('enable','*','init',  after="turnOff")
-        self.fsm.add_transition('doStep','init','init', conditions = ['isNight'])
-        self.fsm.add_transition('doStep','init','Night', conditions = ['isNight'],  before="turnOff")
-        self.fsm.add_transition('doStep','init','Day', conditions = ['isDay'],  before="adjust")
-        self.fsm.add_transition('doStep','Day','Day', conditions = ['isDay'],  before="adjust")
-        self.fsm.add_transition('doStep','Day','init', conditions = ['isNight'],  before="turnOff")
-        
-        
-  
+        self.fsm.add_transition(trigger='enable', source=self.initial, dest='post_halt',
+            after='setInitial')
 
+        self.fsm.add_transition(trigger='doStep', source='post_halt', dest='light',
+            conditions=["need_lights_on"],after='increase_light')
+        self.fsm.add_transition(trigger='doStep', source='post_halt', dest='dark',
+            conditions=["need_lights_off"],after='lights_off')
+
+        self.fsm.add_transition(trigger='doStep', source='light', dest='dark', 
+            conditions=["need_lights_off"], after='lights_off')
+        self.fsm.add_transition(trigger='doStep', source='dark', dest='light', 
+            conditions=["need_lights_on","need_to_increase_light"],after='increase_light')
+
+        self.fsm.add_transition(trigger='doStep', source='dark', dest='light', 
+            conditions=["need_lights_on"])
+        self.fsm.add_transition(trigger='doStep', source='light', dest='light', 
+            conditions=["need_lights_on","need_to_increase_light"], after="increase_light")
+
+        self.fsm.add_transition(trigger='doStep', source='light', dest='light', 
+            conditions=["need_lights_on","need_to_decrease_light"], after="decrease_light")
+        self.fsm.add_transition(trigger='doStep', source='light', dest='light', 
+            conditions=["need_lights_on"])
+
+        self.fsm.add_transition(trigger='disable', source='light', dest=self.initial)
+        self.fsm.add_transition(trigger='disable', source='dark', dest=self.initial)
         # END STUDENT CODE
         
- 
-    
     def setInitial(self):
         self.led = 0
         self.setLED(self.led)
@@ -55,6 +64,10 @@ class Light(Behavior):
         self.mtime = self.sensordata["midnight_time"]
         self.time = self.sensordata["unix_time"]
         self.light = self.sensordata["light"]
+
+    def update_optimal(self):
+        self.optimal_level = optimal['light_level']
+
     
     def act(self):
         # Use 'doStep' trigger for all other transitions
@@ -62,38 +75,38 @@ class Light(Behavior):
         
     # Add all your condition functions here
     # BEGIN STUDENT CODE
-    def isDay(self):
-        if 28800<=(self.mtime)<79200:
-            if self.light<self.optimal_level[0]:
-    	        self.change = (self.led +20 )
-            elif self.light>=self.optimal_level[1]:
-    	        self.change = (self.led-20)
-            else:
-                self.change = (self.led)
-    
-        return 28800<=(self.mtime)<79200
-        
-    def isNight(self):
-        return not 28800<=(self.mtime)<79200
-        
+    def need_lights_on(self):
+        # on between 8am and 10pm
+        hour = (self.mtime//3600)%24
+        return hour >= 8 and hour < 22
+
+    def need_lights_off(self):
+        # off between 10pm and 8am
+        hour = (self.mtime//3600)%24
+        return not (hour >= 8 and hour < 22)
+
+    def need_to_increase_light(self):
+        return self.light < self.optimal_level[0]
+
+    def need_to_decrease_light(self):
+        return self.light >= self.optimal_level[1]
     # END STUDENT CODE
         
     # Add all your before / after action functions here
     # BEGIN STUDENT CODE
-    
-    def adjust(self):
-    	self.setLED(self.change)
-    	  
-    def turnOff(self):
-        self.setLED(0)
+    def increase_light(self):
+        self.setLED(self.led+20)
 
-    
+    def decrease_light(self):
+        self.setLED(self.led-20)
+
+    def lights_off(self):
+        self.setLED(0)
     # END STUDENT CODE
 
     def setLED(self, level):
-        self.led = max(0, min(255,level))
-        self.actuators.doActions((self.name, self.sensors.getTime(), {"led": self.led}))
-                                  
+        self.led = max(0, min(255, level))
+        self.actuators.doActions((self.name, self.sensors.getTime(),  {"led": self.led}))  
 
 """
 The temperature should be greater than the lower limit
@@ -105,40 +118,31 @@ class RaiseTemp(Behavior):
 
         # STUDENT CODE: Modify these lines to use your own initial state name
         #               and add all your FSM states
-        self.initial = 'init'
-        self.states = ['init','tooLow', 'perfect']
+        self.initial = 'initial'
+        self.states = [self.initial, 'post_initial', 'low', 'good']
 
         self.fsm = Machine(self, states=self.states, initial=self.initial,
                            ignore_invalid_triggers=True)
 
         # Add FSM transitions and actions
-        # BEGIN STUDENT CODE
-        self.fsm.add_transition('enable','*','init', after="turnOff")
-        self.fsm.add_transition('disable','*','init',  after="turnOff")
-        self.fsm.add_transition('doStep','init','init', conditions = ['isGood'])
-        self.fsm.add_transition('doStep','init','perfect', conditions = ['isGood'],  before="turnOff")
-        self.fsm.add_transition('doStep','init','tooLow', conditions = ['isBad'],  before="adjust")
-        self.fsm.add_transition('doStep','tooLow','tooLow', conditions = ['isBad'],  before="adjust")
-        self.fsm.add_transition('doStep','tooLow','init', conditions = ['isGood'],  before="turnOff")
+        # BEGIN STUDENT
+        self.fsm.add_transition(trigger='enable', source='initial', dest='post_initial',
+            after='setInitial')
+
+        self.fsm.add_transition(trigger='doStep', source='post_initial', dest='low',
+            conditions=["temp_is_low"], after="raise_temp")
+        self.fsm.add_transition(trigger='doStep', source='post_initial', dest='good',
+            conditions=["temp_good"], after="lower_temp")
+
+        self.fsm.add_transition(trigger='doStep', source='low', dest='good',
+            conditions=["temp_good"], after="lower_temp")
+        self.fsm.add_transition(trigger='doStep', source='good', dest='low',
+            conditions=["temp_is_low"], after="raise_temp")
+
+        self.fsm.add_transition(trigger="disable", source="*", dest="initial")
         # END STUDENT CODE
 
-    
-    def isGood(self):
-        return self.temp >= optimal['temperature'][0]
-    
-    def isBad(self):
-        return self.temp < limits['temperature'][0]
-    
-    def adjust(self):
-        self.setLED(max(self.led,200))
-
-       
-       
-    def turnOff(self):
-        self.setLED(0)
-    
     def setInitial(self):
-        self.led = 0
         self.setLED(0)
         
     def perceive(self):
@@ -150,18 +154,24 @@ class RaiseTemp(Behavior):
 
     # Add all your condition functions here
     # BEGIN STUDENT CODE
-    
-    
+    def temp_is_low(self):
+        return self.temp < limits['temperature'][0]
+
+    def temp_good(self):
+        return self.temp >= optimal['temperature'][0]
     # END STUDENT CODE
 
     # Add all your before / after action functions here
     # BEGIN STUDENT CODE
+    def raise_temp(self):
+        self.setLED(200)
+
+    def lower_temp(self):
+        self.setLED(0)
     # END STUDENT CODE
             
     def setLED(self, level):
-        self.led = max(0, min(255,level))
-        self.actuators.doActions((self.name, self.sensors.getTime(),
-                                  {"led": level}))
+        self.actuators.doActions((self.name, self.sensors.getTime(),  {"led": level}))
         
 """
 The temperature should be less than the upper limit
@@ -173,34 +183,27 @@ class LowerTemp(Behavior):
 
         # STUDENT CODE: Modify these lines to use your own initial state name
         #               and add all your FSM states
-        self.initial = 'init'
-        self.states = [self.initial,'tooHigh','perfect']
+        self.initial = 'initial'
+        self.states = [self.initial, 'post_initial', 'high', 'good']
 
         self.fsm = Machine(self, states=self.states, initial=self.initial,
                            ignore_invalid_triggers=True)
 
         # Add FSM transitions and actions
-        self.fsm.add_transition('enable','*','init', after="setInitial")
-        self.fsm.add_transition('disable','*','init',  after="setInitial")
-        self.fsm.add_transition('doStep','init','init', conditions = ['isGood'])
-        self.fsm.add_transition('doStep','init','perfect', conditions = ['isGood'],  before="setInitial")
-        self.fsm.add_transition('doStep','init','tooHigh', conditions = ['isBad'],  before="adjust")
-        self.fsm.add_transition('doStep','tooHigh','tooHigh', conditions = ['isBad'],  before="adjust")
-        self.fsm.add_transition('doStep','tooHigh','init', conditions = ['isGood'],  before="setInitial")
-        
         # BEGIN STUDENT CODE
-        # END STUDENT CODE
-    
-    def isGood(self):
-        return self.temp <= optimal['temperature'][1]
-    
-    def isBad(self):
-        return self.temp >= limits['temperature'][1]
-    
-    def adjust(self):
-        self.setFan(True)
+        self.fsm.add_transition(trigger='enable', source='initial', dest='post_initial',
+            after='setInitial')
 
-        
+        self.fsm.add_transition(trigger='doStep', source='post_initial', dest='high', 
+            conditions=["temp_is_high"], after="turn_fan_on")
+        self.fsm.add_transition(trigger='doStep', source='high', dest='good', 
+            conditions=["temp_good"], after="turn_fan_off")
+        self.fsm.add_transition(trigger='doStep', source='good', dest='high', 
+            conditions=["temp_is_high"], after="turn_fan_on")
+
+        self.fsm.add_transition(trigger='disable', source='*', dest='initial')
+        # END STUDENT CODE
+
     def setInitial(self):
         self.setFan(False)
         
@@ -213,15 +216,24 @@ class LowerTemp(Behavior):
 
     # Add all your condition functions here
     # BEGIN STUDENT CODE
+    def temp_is_high(self):
+        return self.temp >= limits['temperature'][1]
+
+    def temp_good(self):
+        return self.temp <= optimal['temperature'][1]
     # END STUDENT CODE
-        
+
     # Add all your before / after action functions here
     # BEGIN STUDENT CODE
+    def turn_fan_on(self):
+        self.setFan(True)
+
+    def turn_fan_off(self):
+        self.setFan(False)
     # END STUDENT CODE
             
     def setFan(self, act_state):
-        self.actuators.doActions((self.name, self.sensors.getTime(),
-                                  {"fan": act_state}))
+        self.actuators.doActions((self.name, self.sensors.getTime(),  {"fan": act_state}))
     
 """
 Humidity should be less than the limit
@@ -233,34 +245,26 @@ class LowerHumid(Behavior):
 
         # STUDENT CODE: Modify these lines to use your own initial state name
         #               and add all your FSM states
-        self.initial = 'init'
-        self.states = [self.initial,'tooHigh','perfect']
+        self.initial = 'initial'
+        self.states = [self.initial, 'post_initial', 'humid', 'good']
 
         self.fsm = Machine(self, states=self.states, initial=self.initial,
                            ignore_invalid_triggers=True)
 
         # Add FSM transitions and actions
         # BEGIN STUDENT CODE
+        self.fsm.add_transition(trigger='enable', source='initial', dest='post_initial',
+            after='setInitial')
+
+        self.fsm.add_transition(trigger='doStep', source='post_initial', dest='humid', 
+            conditions=["humidity_is_high"], after="turn_fan_on")
+        self.fsm.add_transition(trigger='doStep', source='humid', dest='good', 
+            conditions=["humidity_is_good"], after="turn_fan_off")
+        self.fsm.add_transition(trigger='doStep', source='good', dest='humid', 
+            conditions=["humidity_is_high"], after="turn_fan_on")
+
+        self.fsm.add_transition(trigger='disable', source='*', dest='initial')
         # END STUDENT CODE
-        self.fsm.add_transition('enable','*','init', after="setInitial")
-        self.fsm.add_transition('disable','*','init',  after="setInitial")
-        self.fsm.add_transition('doStep','init','init', conditions = ['isGood'])
-        self.fsm.add_transition('doStep','init','perfect', conditions = ['isGood'],  before="setInitial")
-        self.fsm.add_transition('doStep','init','tooHigh', conditions = ['isBad'],  before="adjust")
-        self.fsm.add_transition('doStep','tooHigh','tooHigh', conditions = ['isBad'],  before="adjust")
-        self.fsm.add_transition('doStep','tooHigh','init', conditions = ['isGood'],  before="setInitial")
-        
-        # BEGIN STUDENT CODE
-        # END STUDENT CODE
-    
-    def isGood(self):
-        return self.humid <= optimal['humidity'][1]
-    
-    def isBad(self):
-        return self.humid >= limits["humidity"][1]
-    
-    def adjust(self):
-        self.setFan(True)
         
     def setInitial(self):
         self.setFan(False)
@@ -274,15 +278,24 @@ class LowerHumid(Behavior):
 
     # Add all your condition functions here
     # BEGIN STUDENT CODE
+    def humidity_is_high(self):
+        return self.humid >= limits['humidity'][1]
+
+    def humidity_is_good(self):
+        return self.humid <= optimal['humidity'][1]
     # END STUDENT CODE
-        
+
     # Add all your before / after action functions here
     # BEGIN STUDENT CODE
+    def turn_fan_on(self):
+        self.setFan(True)
+
+    def turn_fan_off(self):
+        self.setFan(False)
     # END STUDENT CODE
 
     def setFan(self, act_state):
-        self.actuators.doActions((self.name, self.sensors.getTime(),
-                                  {"fan": act_state}))
+        self.actuators.doActions((self.name, self.sensors.getTime(),  {"fan": act_state}))
             
 """
 Soil moisture should be greater than the lower limit
@@ -303,87 +316,43 @@ class RaiseSMoist(Behavior):
 
         # STUDENT CODE: Modify these lines to use your own initial state name
         #               and add all your FSM states
-        self.initial = 'init'
-        self.states = [self.initial,'waiting','measuring','watering','perfect']
-        self.fsm = Machine(self, states=self.states, initial=self.initial,
+        self.halt = 'halt'
+        self.states = [self.halt, 'initial', 'done', 'waiting',
+        'watering', 'measuring']
+        self.fsm = Machine(self, states=self.states, initial=self.halt,
                            ignore_invalid_triggers=True)
 
         # Add FSM transitions and actions
         # BEGIN STUDENT CODE
-        # END STUDENT CODE
-        self.fsm.add_transition('enable','*','init', after="setInitial")
-        self.fsm.add_transition('disable','*','init',  after="setInitial")
-        self.fsm.add_transition('doStep','init','init', conditions = ['newDay'],after='newDaySetup')
-        
+        self.fsm.add_transition(trigger='enable', source='halt', dest='initial',
+            after=['set_pump_F','set_time_10'])
+        self.fsm.add_transition(trigger='disable', source='*', dest='halt',
+            after=['set_pump_F','set_last_time'])
 
-        self.fsm.add_transition('doStep','init','waiting', conditions = ['alreadyWaited'])
-        self.fsm.add_transition('doStep','waiting','perfect', conditions = ['enoughWater'],after ='sayEnough')
-        self.fsm.add_transition('doStep','waiting','perfect', conditions = ['enoughMoist'],after ='sayMoistEnough')
-        self.fsm.add_transition('doStep','waiting','waiting', conditions = ['emptyReservoir'], after = 'sayEmptyRes')
+        self.fsm.add_transition(trigger='doStep', source='initial', dest='initial', 
+            conditions=['next_day'], after=['reset_water'])
+        self.fsm.add_transition(trigger='doStep', source='initial', dest='waiting', 
+            conditions=['timer_done'])
+
+        self.fsm.add_transition(trigger='doStep', source='waiting', dest='done', 
+            conditions=['saturated'], after=['print_watered'])
+        self.fsm.add_transition(trigger='doStep', source='waiting', dest='done', 
+            conditions=['not_enough_water'])
+        self.fsm.add_transition(trigger='doStep', source='waiting', dest='done', 
+            conditions=['good_moisture'], after=['print_moist'])
+        self.fsm.add_transition(trigger='doStep', source='waiting', dest='watering', 
+            conditions=['dry_soil'], after=['set_time_10','set_pump_T','reset_weight'])
+
+
+        self.fsm.add_transition(trigger='doStep', source='watering', dest='measuring', 
+            conditions=['timer_done'], after=['set_pump_F', 'set_time_20'])
+
+        self.fsm.add_transition(trigger='doStep', source='measuring', dest='waiting', 
+            conditions=['timer_done'], after=['get_total_water'])
         
-        self.fsm.add_transition('doStep','waiting','watering', conditions = ['noWater'],after="addWater")
-        
-        self.fsm.add_transition('doStep','watering','measuring', conditions = ['alreadyWaited'],after="turnOff")
-        self.fsm.add_transition('doStep','measuring','waiting', conditions = ['alreadyWaited'],after="doneMeasuring")
-        self.fsm.add_transition('doStep','perfect','init', conditions = ['newDay'])
-        
-        # BEGIN STUDENT CODE
-        # END STUDENT CODE
-    
-    def enoughMoist(self):
-        return self.smoist_est >= self.moisture_opt
-    def sayMoistEnough(self):
-        print("Soil is moist enough (%s)" %self.smoist_est)
-    def sayEmptyRes(self):
-        print("NOT ENOUGH WATER IN RESERVOIR")
-    def sayEnough(self):
-        print("Watered Enough: %.1f" %self.total_water)
-    def doneMeasuring(self):
-        dwater = self.weight_est - self.start_weight
-        dwater = max(0, dwater)
-        self.total_water += dwater
-        
-    def turnOff(self):
-        self.setPump(False)
-        self.setTimer20()
-        
-        
-    def emptyReservoir(self):
-        return self.water_level < 30
-    
-    def alreadyWaited(self):
-        return self.time >= self.waittime
-    
-    
-    def addWater(self):
-        self.start_weight = self.weight_est
-        self.setPump(True)
-        self.setTimer10()
-        
-    def noWater(self):
-        return self.smoist_est < self.moisture_opt
-    def enoughWater(self):
-        return self.total_water >= self.daily_limit
-        
-    def shouldWait(self):
-        return self.time >= self.waittime    
-    def newDay(self):
-        return self.last_time > self.mtime
-    
-    def setTimer(self, wait): self.waittime = self.time + wait
-    def setTimer10(self): self.setTimer(10)
-    def setTimer20(self): self.setTimer(20)
-        
-    def newDaySetup(self):
-        self.total_water = 0
-        self.last_time = self.mtime
-        
- 
 
     def setInitial(self):
-        self.setTimer10()
-        self.setPump(False)
-        
+        pass
         
     def sliding_window(self, window, item, length=4):
         if (len(window) == length): window = window[1:]
@@ -405,15 +374,79 @@ class RaiseSMoist(Behavior):
 
     # Add all your condition functions here
     # BEGIN STUDENT CODE
+    def next_day(self):
+        return self.last_time > self.mtime
+
+    def not_enough_water(self):
+        return self.water_level < 30
+
+    def saturated(self):
+        return self.total_water >= self.daily_limit
+
+    def dry_soil(self):
+        return self.smoist_est < optimal['moisture'][0]
+
+    def in_prog(self):
+        return self.in_progress
+
+    def timer_done(self):
+        return self.time >= self.waittime
+
+    def good_moisture(self):
+        return self.smoist_est >= optimal['moisture'][0]
     # END STUDENT CODE
         
     # Add all your before / after action functions here
     # BEGIN STUDENT CODE
+    def set_time(self, wait):
+        self.waittime = self.time + wait
+        print("setTimer: %d (%d)" % (self.waittime, wait))
+
+    def set_time_10(self): self.set_time(10)
+    def set_time_20(self): self.set_time(20)
+    def set_time_30(self): self.set_time(30)
+    def set_time_300(self): self.set_time(300)
+
+    def set_water_level(self):
+        print("Set water level: %d" % self.water_level)
+        self.waterlevel = self.water_level
+
+    def set_last_time(self): self.last_time = self.mtime
+
+    def reset_water(self):  # Reset total water each day
+        print("Resetting total water")
+        self.total_water = 0
+        self.set_last_time()
+
+    def set_in_prog(self): self.in_progress = True
+    def reset_in_prog(self): self.in_progress = False
+
+    def get_total_water(self):
+        dwater = self.weight_est - self.start_weight
+        dwater = max(0, dwater)
+        self.total_water += dwater
+        print("calcTotalWater: %.1f (%.1f)" % (self.total_water, dwater))
+
+    def print_watered(self): print(
+        "Watered Enough: %.1f" % self.total_water)
+    def print_moist(self): print(
+        "Moist Enough: %.1f" % self.smoist_est)
+
+    def print_in_prog(self): print("In progress: %.1f" % self.smoist_est)
+    def print_test(self): print("Testing")
+
+    def set_pump_F(self):
+        self.setPump(False)
+    def set_pump_T(self):
+        self.setPump(True)
+
+    def reset_weight(self):
+        print("Soil too dry (%s) - need to water" %self.smoist_est)
+        self.start_weight = self.weight_est
     # END STUDENT CODE
 
     def setPump(self,state):
-        self.actuators.doActions((self.name, self.sensors.getTime(),
-                                  {"wpump": state}))
+        self.actuators.doActions((self.name, self.sensors.getTime(),  {"wpump": state}))
 
 """
 Soil moisture below the upper limit
@@ -426,35 +459,26 @@ class LowerSMoist(Behavior):
 
         # STUDENT CODE: Modify these lines to use your own initial state name
         #               and add all your FSM states
-        self.initial = 'init'
-        self.states = [self.initial,'tooHigh','perfect']
+        self.initial = 'initial'
+        self.states = [self.initial, 'post_initial', 'moist', 'good']
 
         self.fsm = Machine(self, states=self.states, initial=self.initial,
                            ignore_invalid_triggers=True)
 
         # Add FSM transitions and actions
-        # BEGIN STUDENT CODE
+        # BEGIN STUDENT 
+        self.fsm.add_transition(trigger='enable', source='initial', dest='post_initial',
+            after='setInitial')
+
+        self.fsm.add_transition(trigger='doStep', source='post_initial', dest='moist', 
+            conditions=["moist_is_high"], after="turn_fan_on")
+        self.fsm.add_transition(trigger='doStep', source='moist', dest='good', 
+            conditions=["moist_good"], after="turn_fan_off")
+        self.fsm.add_transition(trigger='doStep', source='good', dest='moist', 
+            conditions=["moist_is_high"], after="turn_fan_on")
+
+        self.fsm.add_transition(trigger='disable', source='*', dest='initial')
         # END STUDENT CODE
-        self.fsm.add_transition('enable','*','init', after="setInitial")
-        self.fsm.add_transition('disable','*','init',  after="setInitial")
-        self.fsm.add_transition('doStep','init','init', conditions = ['isGood'])
-        self.fsm.add_transition('doStep','init','perfect', conditions = ['isGood'],  before="setInitial")
-        self.fsm.add_transition('doStep','init','tooHigh', conditions = ['isBad'],  before="adjust")
-        self.fsm.add_transition('doStep','tooHigh','tooHigh', conditions = ['isBad'],  before="adjust")
-        self.fsm.add_transition('doStep','tooHigh','init', conditions = ['isGood'],  before="setInitial")
-        
-        # BEGIN STUDENT CODE
-        # END STUDENT CODE
-    
-    def isGood(self):
-        return self.smoist <= optimal['moisture'][1]
-    
-    def isBad(self):
-        return self.smoist >= limits["moisture"][1]
-    
-    def adjust(self):
-        self.setFan(True)
-        
         
     def setInitial(self):
         self.setFan(False)
@@ -467,14 +491,22 @@ class LowerSMoist(Behavior):
         self.trigger("doStep")
 
     # Add all your condition functions here
-    # BEGIN STUDENT CODE
+    def moist_is_high(self):
+        return self.smoist >= limits['moisture'][1]
+
+    def moist_good(self):
+        return self.smoist <= optimal['moisture'][1]
     # END STUDENT CODE
-        
+
     # Add all your before / after action functions here
     # BEGIN STUDENT CODE
+    def turn_fan_on(self):
+        self.setFan(True)
+
+    def turn_fan_off(self):
+        self.setFan(False)
     # END STUDENT CODE
             
     def setFan(self, act_state):
-        self.actuators.doActions((self.name, self.sensors.getTime(),
-                                  {"fan": act_state}))
-
+        self.actuators.doActions((self.name, self.sensors.getTime(),  {"fan": act_state}))
+        
